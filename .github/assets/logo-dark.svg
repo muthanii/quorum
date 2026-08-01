@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-label="Quorum">
+  <mask id="tail-cut-dark" maskUnits="userSpaceOnUse" x="0" y="0" width="160" height="160">
+    <rect width="160" height="160" fill="#fff"/>
+    <path d="M86 86 L104 112 L140 64" stroke="#000" stroke-width="23" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </mask>
+  <circle cx="70" cy="70" r="48" stroke="#ffffff" stroke-width="13" fill="none" mask="url(#tail-cut-dark)"/>
+  <path d="M86 86 L104 112 L140 64" stroke="#6d7cfa" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

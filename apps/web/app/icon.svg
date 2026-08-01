@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-label="Quorum">
+  <style>
+    /* The bowl follows the browser chrome: ink on a light tab bar, white on a
+       dark one. The accent tail is the same in both. */
+    .bowl { stroke: #0b0c0e; }
+    @media (prefers-color-scheme: dark) { .bowl { stroke: #ffffff; } }
+  </style>
+  <!--
+    The tail is knocked out of the bowl with a mask rather than painted over it,
+    so the gap is genuinely transparent. Painting it with a surface colour would
+    show as a smudge on any chrome that is not exactly that colour.
+  -->
+  <mask id="tail-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="160" height="160">
+    <rect width="160" height="160" fill="#fff"/>
+    <path d="M86 86 L104 112 L140 64" stroke="#000" stroke-width="23" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </mask>
+  <circle class="bowl" cx="70" cy="70" r="48" stroke-width="13" fill="none" mask="url(#tail-cut)"/>
+  <path d="M86 86 L104 112 L140 64" stroke="#6d7cfa" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

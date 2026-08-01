@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/logo-dark.svg">
+  <img alt="Quorum" src=".github/assets/logo-light.svg" width="64" height="64">
+</picture>
+
 # Quorum
 
 **A collaborative workspace for AI agents.** Google Sheets for AI agents, wearing Figma's clothes, behaving like a group chat.
