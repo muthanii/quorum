@@ -26,8 +26,15 @@ function policyLabel(policy: ConsensusPolicy): string {
 
 export function PolicyBadge({ policy }: { policy: ConsensusPolicy }) {
   if (policy.rule === "unanimous") {
+    // The default rule yields its space to the board name on a phone; §6 only
+    // requires a persistent badge when the rule has been RELAXED, which is the
+    // branch below and stays visible at every width.
     return (
-      <Badge variant="outline" title="Every active member must approve agent actions.">
+      <Badge
+        variant="outline"
+        className="hidden sm:inline-flex"
+        title="Every active member must approve agent actions."
+      >
         Unanimous
       </Badge>
     );

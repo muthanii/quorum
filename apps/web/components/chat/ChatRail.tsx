@@ -81,7 +81,7 @@ export function ChatRail({
     <aside
       ref={rootRef}
       aria-label="Chat and proposals"
-      className="flex w-[360px] shrink-0 flex-col border-l bg-background"
+      className="flex min-h-0 w-full flex-1 flex-col border-t bg-background md:w-[360px] md:flex-none md:shrink-0 md:border-t-0 md:border-l"
     >
       <ScrollArea className="min-h-0 flex-1">
         <ol className="flex flex-col gap-3 p-4">

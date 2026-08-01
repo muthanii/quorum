@@ -364,19 +364,27 @@ export function BoardShell({ boardId, self, wsUrl, initialBoard }: BoardShellPro
 
       {/* header: board name · presence · Share · policy (CLAUDE.md §7) */}
       <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-surface px-4">
-        <h1 className="truncate text-ui font-semibold">{detail.board.name}</h1>
-        <Badge variant={statusInfo.variant} aria-live="polite">
-          {statusInfo.label}
-        </Badge>
-        <PolicyBadge policy={policy} />
-        <ActiveQuorumIndicator count={activeIds.length} />
-        {notice ? (
-          <span role="status" className="text-xs text-success">
-            {notice}
+        {/* min-w-0 lets the title actually truncate instead of forcing the
+            header wider than the viewport on a phone. */}
+        <div className="flex min-w-0 items-center gap-2">
+          <h1 className="truncate text-ui font-semibold">{detail.board.name}</h1>
+          <Badge variant={statusInfo.variant} aria-live="polite">
+            {statusInfo.label}
+          </Badge>
+          <PolicyBadge policy={policy} />
+          {/* Quorum count is context, not an action — it yields first on narrow
+              screens so the board name and Share survive. */}
+          <span className="hidden sm:contents">
+            <ActiveQuorumIndicator count={activeIds.length} />
           </span>
-        ) : null}
+          {notice ? (
+            <span role="status" className="hidden text-xs text-success sm:inline">
+              {notice}
+            </span>
+          ) : null}
+        </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <Button
             variant="ghost"
             size="sm"
@@ -403,9 +411,9 @@ export function BoardShell({ boardId, self, wsUrl, initialBoard }: BoardShellPro
             )}
           </Button>
 
-          <Separator orientation="vertical" className="h-6" />
+          <Separator orientation="vertical" className="hidden h-6 sm:block" />
 
-          <div className="flex items-center gap-2" aria-label="Board members">
+          <div className="hidden items-center gap-2 sm:flex" aria-label="Board members">
             {sortedMembers.slice(0, 5).map((member) => {
               const online = connectedSet.has(member.userId);
               return (
@@ -435,9 +443,12 @@ export function BoardShell({ boardId, self, wsUrl, initialBoard }: BoardShellPro
 
           <SharePopover boardId={boardId} disabled={self.role === "viewer"} />
 
+          {/* A ⌘K affordance means nothing on a touch device — the palette is
+              still reachable by keyboard when one is attached. */}
           <Button
             variant="ghost"
             size="sm"
+            className="hidden sm:inline-flex"
             aria-label="Open command palette"
             onClick={() => {
               setPaletteMounted(true);
@@ -472,9 +483,10 @@ export function BoardShell({ boardId, self, wsUrl, initialBoard }: BoardShellPro
         </div>
       ) : null}
 
-      {/* canvas + chat rail */}
-      <div className="flex min-h-0 flex-1">
-        <main className="relative min-w-0 flex-1">
+      {/* canvas + chat rail — side by side on a laptop, stacked on a phone
+          where a 360px rail would leave the canvas a useless sliver. */}
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        <main className="relative min-h-[45vh] min-w-0 flex-1 md:min-h-0">
           <CanvasSurface
             doc={doc}
             synced={synced}
