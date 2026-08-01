@@ -8,7 +8,7 @@ import * as Y from "yjs";
 
 import { newId } from "@quorum/shared/ids";
 import type { ArtifactType, TableBody } from "@quorum/shared/schemas/artifact";
-import { createArtifactInDoc, getArtifacts } from "@quorum/shared/yjs/doc";
+import { cascadePosition, createArtifactInDoc, getArtifacts } from "@quorum/shared/yjs/doc";
 
 const DEFAULT_SIZE: Record<ArtifactType, { w: number; h: number }> = {
   doc: { w: 480, h: 400 },
@@ -39,9 +39,7 @@ export function createHumanArtifact(doc: Y.Doc, type: ArtifactType): string {
     meta: {
       type,
       title: DEFAULT_TITLE[type],
-      // same cascade the ws server uses, so stacked creations never overlap
-      x: 120 + (count % 6) * 48,
-      y: 120 + (count % 6) * 48,
+      ...cascadePosition(count),
       w: size.w,
       h: size.h,
       createdAt: Date.now(),

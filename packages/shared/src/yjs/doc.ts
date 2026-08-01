@@ -258,6 +258,27 @@ const DEFAULT_SIZE: Record<"doc" | "table", { w: number; h: number }> = {
   table: { w: 560, h: 320 },
 };
 
+const CASCADE_ORIGIN = 120;
+const CASCADE_STEP = 48;
+// Co-prime slot counts: a position repeats only every lcm(6,5)=30 artifacts
+// instead of every 6. Equal moduli on both axes put artifact #7 at exactly
+// #1's coordinates, hiding it completely under a same-sized card.
+const CASCADE_X_SLOTS = 6;
+const CASCADE_Y_SLOTS = 5;
+
+/**
+ * Spawn position for the `count`-th artifact on a board. Shared by the client
+ * (human creates) and the ws server (approved agent creates) so both cascade
+ * identically — the two must agree or the same board lays out differently
+ * depending on who made the artifact.
+ */
+export function cascadePosition(count: number): { x: number; y: number } {
+  return {
+    x: CASCADE_ORIGIN + (count % CASCADE_X_SLOTS) * CASCADE_STEP,
+    y: CASCADE_ORIGIN + (count % CASCADE_Y_SLOTS) * CASCADE_STEP,
+  };
+}
+
 export interface ApplyOperationContext {
   /** Unix epoch ms used as createdAt for created artifacts. */
   now: number;
@@ -305,9 +326,7 @@ export function applyOperationToDoc(
     const meta: ArtifactMeta = {
       type: operation.type,
       title: operation.title,
-      // simple cascade so stacked creations don't fully overlap
-      x: 120 + (count % 6) * 48,
-      y: 120 + (count % 6) * 48,
+      ...cascadePosition(count),
       w: size.w,
       h: size.h,
       createdAt: ctx.now,
