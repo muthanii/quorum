@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+
+      - run: pnpm lint
+
+      - run: pnpm test
+
+      # Catches env-parse regressions and enforces the 250KB bundle budget.
+      # Values are throwaway: nothing here connects to a real service.
+      - name: Build web
+        working-directory: apps/web
+        env:
+          DATABASE_URL: postgres://quorum:quorum@localhost:5432/quorum
+          REDIS_URL: redis://localhost:6379
+          AUTH_SECRET: Y2ktcGxhY2Vob2xkZXItbm90LWEtcmVhbC1zZWNyZXQ=
+          CREDENTIALS_ENCRYPTION_KEY: Y2ktcGxhY2Vob2xkZXItbm90LWEtcmVhbC1zZWNyZXQ=
+          NEXT_PUBLIC_WS_URL: ws://localhost:3001
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+        run: pnpm build
