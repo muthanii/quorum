@@ -21,3 +21,4 @@ blob-report/
 # misc
 .DS_Store
 *.log
+.gstack/
