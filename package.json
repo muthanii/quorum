@@ -1,0 +1,29 @@
+{
+  "name": "quorum",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.9"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --stream dev",
+    "dev:web": "pnpm --filter @quorum/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint . && prettier --check .",
+    "lint:fix": "eslint . --fix && prettier --write .",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter @quorum/e2e test:e2e",
+    "db:generate": "pnpm --filter @quorum/db generate",
+    "db:migrate": "pnpm --filter @quorum/db migrate",
+    "db:studio": "pnpm --filter @quorum/db studio",
+    "analyze": "pnpm --filter @quorum/web analyze"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.19.0"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@quorum/agent-protocol",
+  "version": "1.0.0",
+  "description": "The public Quorum Agent API contract: wire types, HMAC signature helpers, starter snippets. Dependency-free so you can vendor it.",
+  "type": "module",
+  "exports": {
+    "./v1/types": "./src/v1/types.ts",
+    "./v1/signature": "./src/v1/signature.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

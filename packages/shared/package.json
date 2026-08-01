@@ -1,0 +1,29 @@
+{
+  "name": "@quorum/shared",
+  "version": "0.1.0",
+  "description": "Zod schemas, domain types, id/color utilities, Yjs doc helpers, and the pure consensus engine shared by web, ws, and worker.",
+  "type": "module",
+  "exports": {
+    "./ids": "./src/ids.ts",
+    "./colors": "./src/colors.ts",
+    "./constants": "./src/constants.ts",
+    "./schemas/*": "./src/schemas/*.ts",
+    "./consensus/*": "./src/consensus/*.ts",
+    "./yjs/*": "./src/yjs/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@quorum/agent-protocol": "workspace:*",
+    "nanoid": "^5.0.9",
+    "yjs": "^13.6.21",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

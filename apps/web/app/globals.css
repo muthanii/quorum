@@ -1,0 +1,144 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+ * Quorum theme — dark-first (CLAUDE.md §7).
+ *
+ * Raw palette values live on :root (dark) and [data-theme="light"]; the
+ * @theme block maps them into Tailwind utility namespaces. Spacing follows
+ * the 8px grid: use even spacing steps (2 = 8px, 4 = 16px…) for layout; odd
+ * steps only for sub-grid optical nudges inside controls.
+ * ------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: dark;
+  --background: #0b0c0e;
+  --surface: #121316;
+  --raised: #17181c;
+  --border: #26272c;
+  --border-strong: #3a3c43;
+  --foreground: #e7e8ea;
+  --muted: #9a9ca3;
+  --faint: #62646c;
+  --accent: #6d7cfa;
+  --accent-foreground: #ffffff;
+  --ring: #8b96ff;
+  --danger: #ff6b6b;
+  --success: #51cf66;
+  --warning: #ffd43b;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --background: #fafafa;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --border: #e4e5e9;
+  --border-strong: #cfd1d8;
+  --foreground: #17181c;
+  --muted: #5f6168;
+  --faint: #9a9ca3;
+  --accent: #4c5ae0;
+  --accent-foreground: #ffffff;
+  --ring: #4c5ae0;
+  --danger: #d6453d;
+  --success: #2f9e44;
+  --warning: #b58a00;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-ring: var(--ring);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+
+  /* Radii: 6px controls, 10px panels, 14px floating surfaces. */
+  --radius-control: 6px;
+  --radius-panel: 10px;
+  --radius-float: 14px;
+
+  /* Motion: 120–200ms, one easing curve everywhere. */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 120ms;
+  --duration-base: 160ms;
+  --duration-slow: 200ms;
+
+  /* No font downloads: system-installed Inter / JetBrains Mono with fallbacks. */
+  --font-sans:
+    Inter, "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+    monospace;
+
+  /* Dense, calm UI text: 13px with a 20px line. Body base is 14px. */
+  --text-ui: 0.8125rem;
+  --text-ui--line-height: 1.25rem;
+}
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border);
+  }
+
+  html {
+    font-family: var(--font-sans);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--accent) 35%, transparent);
+  }
+
+  /* WCAG AA: focus is always visible, never color-only. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* Quorum recalculation flash: the ActiveQuorumIndicator visibly pulses when
+ * the active-member count changes (CLAUDE.md §6 — never silent). */
+@keyframes quorum-flash {
+  0% {
+    background-color: color-mix(in oklab, var(--warning) 35%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@utility animate-quorum-flash {
+  animation: quorum-flash 700ms var(--ease-standard);
+}
+
+/* Respect prefers-reduced-motion: kill transitions and animations outright. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
