@@ -29,6 +29,31 @@ export interface BoardConnection {
   destroy(): void;
 }
 
+/**
+ * NEXT_PUBLIC_WS_URL is inlined into the browser bundle at build time, so a
+ * value of `localhost` is only correct for whoever is sitting at the machine.
+ * Loaded from a phone, another laptop, or a tunnel, `localhost` resolves to
+ * *that* device and the board hangs at "Connecting…" with nothing in the log.
+ *
+ * When the configured host is loopback but the page is not, follow the address
+ * the page was actually served from. Deployments (where ws lives on its own
+ * host) set a real hostname and are untouched.
+ */
+export function resolveWsUrl(configured: string, location?: { hostname: string }): string {
+  if (!location) return configured;
+  let url: URL;
+  try {
+    url = new URL(configured);
+  } catch {
+    return configured;
+  }
+  const configuredIsLoopback = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  const pageIsLoopback = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+  if (!configuredIsLoopback || pageIsLoopback) return configured;
+  url.hostname = location.hostname;
+  return url.toString().replace(/\/$/, "");
+}
+
 export function createBoardConnection(options: {
   boardId: string;
   wsUrl: string;
@@ -48,7 +73,7 @@ export function createBoardConnection(options: {
   awareness.setLocalState(initialState);
 
   const provider = new HocuspocusProvider({
-    url: options.wsUrl,
+    url: resolveWsUrl(options.wsUrl, typeof window === "undefined" ? undefined : window.location),
     name: options.boardId,
     document: doc,
     awareness,

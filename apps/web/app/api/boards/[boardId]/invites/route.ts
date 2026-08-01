@@ -5,11 +5,11 @@ import { getDb } from "@quorum/db/client";
 import { inviteLinks } from "@quorum/db/schema";
 
 import { resolveViewer } from "@/lib/auth/viewer";
-import { env } from "@/lib/env";
 import type { CreateInviteResponse } from "@/lib/api/types";
 import { getMembership } from "@/lib/server/boards";
 import { jsonError, readJson, serverError } from "@/lib/server/http";
 import { log } from "@/lib/server/log";
+import { originFromRequest } from "@/lib/server/origin";
 
 interface RouteContext {
   params: Promise<{ boardId: string }>;
@@ -56,7 +56,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
       {
         token: invite.token,
         role: body.data.role,
-        url: `${env.NEXT_PUBLIC_APP_URL}/i/${invite.token}`,
+        url: `${originFromRequest(request)}/i/${invite.token}`,
       } satisfies CreateInviteResponse,
       { status: 201 },
     );

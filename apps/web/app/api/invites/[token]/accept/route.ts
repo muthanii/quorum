@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 
 import { guestCookieOptions, GUEST_COOKIE } from "@/lib/auth/guest";
 import { resolveViewer } from "@/lib/auth/viewer";
-import { env } from "@/lib/env";
 import { createGuest } from "@/lib/server/guests";
 import { serverError } from "@/lib/server/http";
 import { acceptInvite, lookupInvite } from "@/lib/server/invites";
 import { log } from "@/lib/server/log";
+import { originFromRequest } from "@/lib/server/origin";
 
 interface RouteContext {
   params: Promise<{ token: string }>;
@@ -19,7 +19,7 @@ interface RouteContext {
  * cookie — a Server Component cannot set cookies, a route handler can) and
  * redirects into the board.
  */
-export async function GET(_request: Request, context: RouteContext): Promise<NextResponse> {
+export async function GET(request: Request, context: RouteContext): Promise<NextResponse> {
   try {
     const { token } = await context.params;
     const lookup = await lookupInvite(token);
@@ -27,7 +27,7 @@ export async function GET(_request: Request, context: RouteContext): Promise<Nex
       // Send invalid/expired links back to the page, which renders the
       // explanation (it never redirects those back here, so no loop).
       return NextResponse.redirect(
-        new URL(`/i/${encodeURIComponent(token)}`, env.NEXT_PUBLIC_APP_URL),
+        new URL(`/i/${encodeURIComponent(token)}`, originFromRequest(request)),
       );
     }
 
@@ -45,7 +45,7 @@ export async function GET(_request: Request, context: RouteContext): Promise<Nex
       editorPending: result.editorPending,
     });
 
-    const destination = new URL(`/b/${result.boardId}`, env.NEXT_PUBLIC_APP_URL);
+    const destination = new URL(`/b/${result.boardId}`, originFromRequest(request));
     if (result.editorPending) destination.searchParams.set("editorRequested", "1");
 
     const response = NextResponse.redirect(destination);
