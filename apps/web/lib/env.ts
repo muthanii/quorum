@@ -10,6 +10,16 @@
  */
 import { z } from "zod";
 
+/**
+ * An optional value that may legitimately arrive as "". `.env.example` ships
+ * every optional key with an empty value, so a copied file sets them to ""
+ * rather than leaving them unset — treat that as "not configured", or the
+ * documented setup path (copy the example, fill two secrets, go) fails.
+ */
+function optional(schema: z.ZodString) {
+  return z.preprocess((value) => (value === "" ? undefined : value), schema.optional());
+}
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 
@@ -18,17 +28,17 @@ const envSchema = z.object({
   AUTH_SECRET: z.string().min(16),
 
   // OAuth / email providers are optional — a provider is skipped when unset.
-  AUTH_GOOGLE_ID: z.string().min(1).optional(),
-  AUTH_GOOGLE_SECRET: z.string().min(1).optional(),
-  AUTH_GITHUB_ID: z.string().min(1).optional(),
-  AUTH_GITHUB_SECRET: z.string().min(1).optional(),
-  AUTH_RESEND_KEY: z.string().min(1).optional(),
-  EMAIL_FROM: z.string().min(3).optional(),
+  AUTH_GOOGLE_ID: optional(z.string().min(1)),
+  AUTH_GOOGLE_SECRET: optional(z.string().min(1)),
+  AUTH_GITHUB_ID: optional(z.string().min(1)),
+  AUTH_GITHUB_SECRET: optional(z.string().min(1)),
+  AUTH_RESEND_KEY: optional(z.string().min(1)),
+  EMAIL_FROM: optional(z.string().min(3)),
 
   /** base64, exactly 32 bytes — enforced byte-exactly by @quorum/db/crypto. */
   CREDENTIALS_ENCRYPTION_KEY: z.string().min(1),
   /** Bearer secret for the ws server's /internal API (used by later features). */
-  INTERNAL_API_SECRET: z.string().min(1).optional(),
+  INTERNAL_API_SECRET: optional(z.string().min(1)),
 
   NEXT_PUBLIC_APP_URL: z.string().url(),
   NEXT_PUBLIC_WS_URL: z.string().min(1),

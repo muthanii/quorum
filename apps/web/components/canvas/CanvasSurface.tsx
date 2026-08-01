@@ -90,7 +90,20 @@ export function CanvasSurface({
         backgroundPosition: `${pan.x % GRID_SIZE}px ${pan.y % GRID_SIZE}px`,
       }}
       onPointerDown={(event) => {
-        // Only reaches us from empty space — artifact cards stop propagation.
+        // Controls rendered *inside* the canvas (the empty-state actions,
+        // artifact chrome) bubble their pointerdown up here. Capturing the
+        // pointer would retarget pointerup to this surface, and the browser
+        // then never fires `click` on the control — the button silently does
+        // nothing. Leave interactive descendants alone.
+        if (
+          (event.target as HTMLElement).closest(
+            "button, a, input, textarea, select, [role='button'], [contenteditable='true']",
+          )
+        ) {
+          return;
+        }
+        // Panning is a primary-button gesture; let right/middle click through.
+        if (event.button !== 0) return;
         event.currentTarget.setPointerCapture(event.pointerId);
         panDragRef.current = {
           pointerId: event.pointerId,
