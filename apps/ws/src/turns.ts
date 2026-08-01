@@ -14,6 +14,7 @@ import { CHAT_CONTEXT_TAIL } from "@quorum/shared/constants";
 import { isId, newId } from "@quorum/shared/ids";
 import { messageSchema, type Message } from "@quorum/shared/schemas/message";
 import {
+  appendMessage,
   getArtifacts,
   getChat,
   getProposals,
@@ -31,6 +32,7 @@ import type {
 import * as Y from "yjs";
 
 import { serializeError, type Logger } from "./log";
+import type { TurnRateLimiter } from "./rate-limit";
 import type { BoardStore } from "./stores";
 
 // Wire types via the shared zod validators (apps/ws does not depend on
@@ -134,6 +136,12 @@ export interface TurnDispatcherDeps {
   boards: Pick<BoardStore, "listAgents" | "getAgent">;
   queue: TurnQueue;
   log: Logger;
+  /**
+   * Per-agent + per-board turn budget. Omitted only by unit tests that run
+   * without Redis — server.ts always wires it.
+   */
+  limiter?: TurnRateLimiter;
+  now?: () => number;
 }
 
 interface AttachedBoard {
@@ -147,8 +155,11 @@ interface AttachedBoard {
 export class TurnDispatcher {
   private readonly attached = new Map<string, AttachedBoard>();
   private readonly chains = new Map<string, Promise<void>>();
+  private readonly now: () => number;
 
-  constructor(private readonly deps: TurnDispatcherDeps) {}
+  constructor(private readonly deps: TurnDispatcherDeps) {
+    this.now = deps.now ?? Date.now;
+  }
 
   attach(boardId: string, doc: Y.Doc): void {
     if (this.attached.has(boardId)) return;
@@ -222,6 +233,17 @@ export class TurnDispatcher {
       },
     ].slice(-CHAT_CONTEXT_TAIL);
 
+    // Approved turns are charged too: the budget protects the third party's
+    // endpoint, and unanimity says nothing about how fast it can be hit.
+    const allowed = await this.allowTurn({
+      boardId,
+      doc,
+      agentId: targetAgentId,
+      agentName: target.name,
+      trigger: "proposal_approved",
+    });
+    if (!allowed) return false;
+
     await this.deps.queue.add({
       turnId: newId("turn"),
       boardId,
@@ -233,7 +255,10 @@ export class TurnDispatcher {
     return true;
   }
 
-  /** Exposed for tests: mention/broadcast → jobs for one chat message. */
+  /**
+   * Exposed for tests: mention/broadcast → the jobs actually enqueued for one
+   * chat message (rate-limited turns are dropped, not returned).
+   */
   async dispatchMessage(boardId: string, doc: Y.Doc, message: Message): Promise<AgentTurnJob[]> {
     if (message.role !== "human" || message.mentions.length === 0) return [];
 
@@ -267,7 +292,16 @@ export class TurnDispatcher {
       });
     }
 
+    const enqueued: AgentTurnJob[] = [];
     for (const job of jobs) {
+      const allowed = await this.allowTurn({
+        boardId,
+        doc,
+        agentId: job.agentId,
+        agentName: byId.get(job.agentId)?.name ?? "This agent",
+        trigger: job.trigger.type,
+      });
+      if (!allowed) continue;
       await this.deps.queue.add(job);
       this.deps.log.info("agent turn enqueued", {
         boardId,
@@ -275,8 +309,56 @@ export class TurnDispatcher {
         turnId: job.turnId,
         trigger: job.trigger.type,
       });
+      enqueued.push(job);
     }
-    return jobs;
+    return enqueued;
+  }
+
+  /**
+   * Charge one turn against the agent + board budgets. A refusal is logged
+   * AND announced in the board chat: a turn that vanishes without explanation
+   * is the silent rollback CLAUDE.md §7 forbids. Only the first refusal per
+   * window speaks, so the notice never becomes the flood it is reporting.
+   */
+  private async allowTurn(input: {
+    boardId: string;
+    doc: Y.Doc;
+    agentId: string;
+    agentName: string;
+    trigger: TriggerType;
+  }): Promise<boolean> {
+    const { limiter } = this.deps;
+    if (limiter === undefined) return true;
+
+    const verdict = await limiter.checkTurn({ boardId: input.boardId, agentId: input.agentId });
+    if (verdict.allowed) return true;
+
+    this.deps.log.warn("agent turn dropped — rate limited", {
+      boardId: input.boardId,
+      agentId: input.agentId,
+      trigger: input.trigger,
+      scope: verdict.scope,
+      limit: verdict.limit,
+      windowMs: verdict.windowMs,
+    });
+
+    if (verdict.firstOverLimit) {
+      const seconds = Math.round(verdict.windowMs / 1000);
+      const cap =
+        verdict.scope === "agent"
+          ? `Each agent is capped at ${verdict.limit} turns per ${seconds}s.`
+          : `This board is capped at ${verdict.limit} agent turns per ${seconds}s.`;
+      appendMessage(input.doc, {
+        id: newId("message"),
+        role: "system",
+        authorId: "system",
+        name: "Quorum",
+        content: `${input.agentName} is being rate limited — that turn was not sent. ${cap} Try again in a moment.`,
+        createdAt: this.now(),
+        mentions: [],
+      });
+    }
+    return false;
   }
 
   private schedule(boardId: string, task: () => Promise<void>): void {

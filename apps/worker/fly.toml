@@ -1,0 +1,31 @@
+# Quorum agent-turn worker — BullMQ consumer, concurrency 5.
+# See DEPLOYING.md for the full runbook.
+#
+# Deploy from the REPO ROOT (the image needs the lockfile and packages/*):
+#   fly deploy --config apps/worker/fly.toml --dockerfile apps/worker/Dockerfile .
+#
+# Secrets are never in this file — set them once with:
+#   fly secrets set -a quorum-worker DATABASE_URL=… REDIS_URL=… INTERNAL_API_SECRET=… CREDENTIALS_ENCRYPTION_KEY=…
+
+app = "quorum-worker"
+primary_region = "iad"
+
+# No [http_service] and no [[services]]: the worker never binds a port. Giving
+# Fly a port here would produce a health check nothing can answer, and the
+# machine would be restarted forever.
+
+[env]
+  NODE_ENV = "production"
+  # Only used to derive the ws internal API base URL — see the note in
+  # apps/worker/src/env.ts and the blocker section of DEPLOYING.md.
+  WS_PORT = "3001"
+
+[deploy]
+  # Safe to overlap: turns are idempotent on turnId and BullMQ redelivers a
+  # job whose machine went away, so more than one consumer is fine.
+  strategy = "rolling"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "512mb"

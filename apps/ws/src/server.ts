@@ -17,6 +17,7 @@ import { createInternalApi, type DocGateway } from "./internal-api";
 import { createLogger, serializeError } from "./log";
 import { PostgresPersistence } from "./persistence";
 import { PresenceTracker } from "./presence";
+import { createTurnRateLimiter } from "./rate-limit";
 import { createStores } from "./stores";
 import { TurnDispatcher, type AgentTurnJob, type TurnQueue } from "./turns";
 
@@ -47,7 +48,14 @@ async function main(): Promise<void> {
   };
 
   const presence = new PresenceTracker({ boards: stores.boards, log });
-  const dispatcher = new TurnDispatcher({ boards: stores.boards, queue: turnQueue, log });
+  const dispatcher = new TurnDispatcher({
+    boards: stores.boards,
+    queue: turnQueue,
+    log,
+    // Shares the queue's connection on purpose: one non-blocking EVAL per
+    // turn, so a second Redis connection would buy nothing.
+    limiter: createTurnRateLimiter({ redis, log }),
+  });
   const consensus = new ConsensusController({
     boards: stores.boards,
     audit: stores.audit,

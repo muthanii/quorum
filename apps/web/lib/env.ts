@@ -24,6 +24,8 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 
   DATABASE_URL: z.string().min(1),
+  /** Backs API rate limiting (lib/server/rate-limit.ts) and the BullMQ queue. */
+  REDIS_URL: z.string().url(),
   /** Signs Auth.js sessions, guest cookies, and the board ws JWT. */
   AUTH_SECRET: z.string().min(16),
 

@@ -23,13 +23,25 @@ const envSchema = z.object({
       message: `must be base64 for exactly ${KEY_BYTES} bytes`,
     }),
   WS_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
+  /**
+   * Where the ws server's /internal API actually lives. Only correct as
+   * localhost when both processes share a host, which is true in `pnpm dev`
+   * and false in every real deployment — on Fly the worker and ws are separate
+   * machines, so an unset value here means turns run and then silently fail to
+   * post their results back. Set it to the ws host (e.g.
+   * http://quorum-ws.internal:3001 over Fly's private network).
+   */
+  WS_INTERNAL_URL: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().url().optional(),
+  ),
 });
 
 export interface WorkerEnv {
   redisUrl: string;
   databaseUrl: string;
   internalApiSecret: string;
-  /** The ws server's internal HTTP API, derived from WS_PORT. */
+  /** The ws server's internal HTTP API: WS_INTERNAL_URL, else localhost:WS_PORT. */
   wsInternalBaseUrl: string;
 }
 
@@ -46,6 +58,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): WorkerEnv {
     redisUrl: parsed.data.REDIS_URL,
     databaseUrl: parsed.data.DATABASE_URL,
     internalApiSecret: parsed.data.INTERNAL_API_SECRET,
-    wsInternalBaseUrl: `http://localhost:${parsed.data.WS_PORT}`,
+    wsInternalBaseUrl:
+      parsed.data.WS_INTERNAL_URL?.replace(/\/+$/, "") ?? `http://localhost:${parsed.data.WS_PORT}`,
   };
 }

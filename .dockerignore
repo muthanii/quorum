@@ -1,0 +1,52 @@
+# Build context for apps/ws and apps/worker. Both images are built FROM THE
+# REPO ROOT because pnpm needs the lockfile, pnpm-workspace.yaml and every
+# workspace manifest to resolve a filtered install.
+#
+# Keep every package.json in the context: `pnpm install --frozen-lockfile`
+# compares the lockfile against all workspace projects, so hiding one (even
+# apps/web, which deploys to Vercel) makes the install fail as out of date.
+
+# Secrets — an image must never carry them; Fly injects them at runtime.
+.env
+.env.*
+!.env.example
+
+# Reinstalled inside the image; copying host node_modules would drag in
+# platform-specific binaries and break pnpm's symlink layout.
+node_modules
+**/node_modules
+
+# Build output
+.next
+**/.next
+dist
+**/dist
+out
+**/out
+*.tsbuildinfo
+
+# Test + tooling output
+coverage
+**/coverage
+test-results
+**/test-results
+playwright-report
+**/playwright-report
+blob-report
+**/blob-report
+
+# Not needed by either server image
+.git
+.github
+.gstack
+.claude
+.vscode
+.idea
+Dockerfile
+**/Dockerfile
+.dockerignore
+docker-compose.yml
+vercel.json
+*.md
+.DS_Store
+*.log

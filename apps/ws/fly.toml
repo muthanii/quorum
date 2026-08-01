@@ -1,0 +1,50 @@
+# Quorum realtime server — Hocuspocus websockets + the internal HTTP API,
+# both on WS_PORT. See DEPLOYING.md for the full runbook.
+#
+# Deploy from the REPO ROOT (the image needs the lockfile and packages/*):
+#   fly deploy --config apps/ws/fly.toml --dockerfile apps/ws/Dockerfile .
+#
+# Secrets are never in this file — set them once with:
+#   fly secrets set -a quorum-ws DATABASE_URL=… REDIS_URL=… AUTH_SECRET=… INTERNAL_API_SECRET=…
+
+app = "quorum-ws"
+primary_region = "iad"
+
+[env]
+  NODE_ENV = "production"
+  # Matches internal_port below and the worker's WS_PORT (apps/worker/src/env.ts
+  # derives the internal API base URL from it).
+  WS_PORT = "3001"
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  # A board's Y.Doc lives in THIS process's memory until it is snapshotted.
+  # A stopped machine drops every open board mid-vote; a second machine would
+  # serve the same board from a second, divergent copy of the doc. Exactly one
+  # machine, always on — keep `fly scale count 1`.
+  auto_stop_machines = false
+  auto_start_machines = false
+  min_machines_running = 1
+  processes = ["app"]
+
+  # GET /healthz is served by the internal API (apps/ws/src/internal-api.ts)
+  # and deliberately requires no auth.
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+
+[deploy]
+  # Not "rolling"/"bluegreen": both overlap the old and new machine, and two
+  # live ws instances mean two copies of the same board. Accept a few seconds
+  # of reconnect instead — clients retry and Yjs re-syncs from the snapshot.
+  strategy = "immediate"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  # Every open board's Y.Doc is resident. Watch memory as board count grows.
+  memory = "1gb"

@@ -29,6 +29,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",
     "dompurify": "^3.2.3",
+    "ioredis": "^5.4.2",
     "jose": "^5.9.6",
     "lucide-react": "^0.469.0",
     "nanoid": "^5.0.9",

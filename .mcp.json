@@ -1,5 +1,9 @@
 {
   "mcpServers": {
+    "vercel": {
+      "type": "http",
+      "url": "https://mcp.vercel.com"
+    },
     "webclaw": {
       "command": "/home/muthanii/.local/node/bin/npx",
       "args": ["-y", "@webclaw/mcp"],

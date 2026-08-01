@@ -9,11 +9,17 @@ import {
   appendMessage,
   createArtifactInDoc,
   createProposalInDoc,
+  listMessages,
   setAgentStatus,
   setProposalStatus,
 } from "@quorum/shared/yjs/doc";
 
 import { nullLogger } from "../src/log";
+import {
+  createTurnRateLimiter,
+  type RateLimitVerdict,
+  type TurnRateLimiter,
+} from "../src/rate-limit";
 import type { AgentRecord } from "../src/stores";
 import { TurnDispatcher, materializeTurnContext } from "../src/turns";
 import { makeFakeBoards, makeFakeQueue } from "./fakes";
@@ -126,30 +132,36 @@ describe("materializeTurnContext", () => {
   });
 });
 
-describe("TurnDispatcher mention → jobs", () => {
-  function setup(agents: AgentRecord[]) {
-    const doc = new Y.Doc();
-    const boards = makeFakeBoards({
-      board: {
-        id: boardId,
-        ownerUserId: newId("user"),
-        policy: {
-          rule: "unanimous",
-          quorum: "active",
-          timeoutMs: 300_000,
-          onTimeout: "reject",
-          vetoIsFinal: true,
-          autoApproveOwnProposals: false,
-        },
+function setup(agents: AgentRecord[], limiter?: TurnRateLimiter) {
+  const doc = new Y.Doc();
+  const boards = makeFakeBoards({
+    board: {
+      id: boardId,
+      ownerUserId: newId("user"),
+      policy: {
+        rule: "unanimous",
+        quorum: "active",
+        timeoutMs: 300_000,
+        onTimeout: "reject",
+        vetoIsFinal: true,
+        autoApproveOwnProposals: false,
       },
-      agents,
-    });
-    const queue = makeFakeQueue();
-    const dispatcher = new TurnDispatcher({ boards, queue, log: nullLogger() });
-    dispatcher.attach(boardId, doc);
-    return { doc, boards, queue, dispatcher };
-  }
+    },
+    agents,
+  });
+  const queue = makeFakeQueue();
+  const dispatcher = new TurnDispatcher({
+    boards,
+    queue,
+    log: nullLogger(),
+    limiter,
+    now: () => NOW,
+  });
+  dispatcher.attach(boardId, doc);
+  return { doc, boards, queue, dispatcher };
+}
 
+describe("TurnDispatcher mention → jobs", () => {
   it("enqueues one mention job per mentioned ready agent, skipping others", async () => {
     const ready = agentRecord("Researcher");
     const degraded = agentRecord("Flaky", "degraded");
@@ -251,5 +263,111 @@ describe("TurnDispatcher mention → jobs", () => {
     await dispatcher.idle(boardId);
 
     expect(queue.jobs).toHaveLength(1);
+  });
+});
+
+/** Allows the first `budget` turns of the run, then refuses like the real limiter. */
+function stubLimiter(budget: number): TurnRateLimiter & { calls: number } {
+  const stub = {
+    calls: 0,
+    async checkTurn(): Promise<RateLimitVerdict> {
+      stub.calls += 1;
+      if (stub.calls <= budget) return { allowed: true };
+      return {
+        allowed: false,
+        scope: "agent",
+        limit: budget,
+        windowMs: 60_000,
+        firstOverLimit: stub.calls === budget + 1,
+      };
+    },
+  };
+  return stub;
+}
+
+function systemMessages(doc: Y.Doc): string[] {
+  return listMessages(doc)
+    .filter((message) => message.role === "system")
+    .map((message) => message.content);
+}
+
+describe("TurnDispatcher rate limiting", () => {
+  it("enqueues while under the limit, and says nothing in chat", async () => {
+    const ready = agentRecord("Researcher");
+    const { doc, queue, dispatcher } = setup([ready], stubLimiter(2));
+    setAgentStatus(doc, ready.id, "ready", NOW);
+
+    appendMessage(doc, humanMessage("hi", [ready.id]));
+    await dispatcher.idle(boardId);
+
+    expect(queue.jobs).toHaveLength(1);
+    expect(systemMessages(doc)).toEqual([]);
+  });
+
+  it("drops the turn over the limit and explains it in chat", async () => {
+    const ready = agentRecord("Researcher");
+    const { doc, queue, dispatcher } = setup([ready], stubLimiter(1));
+    setAgentStatus(doc, ready.id, "ready", NOW);
+
+    appendMessage(doc, humanMessage("first", [ready.id]));
+    await dispatcher.idle(boardId);
+    appendMessage(doc, humanMessage("spam", [ready.id]));
+    await dispatcher.idle(boardId);
+
+    expect(queue.jobs).toHaveLength(1);
+    expect(queue.jobs[0]?.context.messages.at(-1)?.content).toBe("first");
+    const notices = systemMessages(doc);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toContain("Researcher");
+    expect(notices[0]).toContain("rate limited");
+  });
+
+  it("does not repeat the notice for every dropped turn in the window", async () => {
+    const ready = agentRecord("Researcher");
+    const { doc, queue, dispatcher } = setup([ready], stubLimiter(0));
+    setAgentStatus(doc, ready.id, "ready", NOW);
+
+    for (let i = 0; i < 5; i++) appendMessage(doc, humanMessage(`spam ${i}`, [ready.id]));
+    await dispatcher.idle(boardId);
+
+    expect(queue.jobs).toHaveLength(0);
+    expect(systemMessages(doc)).toHaveLength(1);
+  });
+
+  it("still enqueues when the limiter's store is down", async () => {
+    const ready = agentRecord("Researcher");
+    const failOpen = createTurnRateLimiter({
+      redis: {
+        async eval() {
+          throw new Error("ECONNREFUSED");
+        },
+      },
+      log: nullLogger(),
+    });
+    const { doc, queue, dispatcher } = setup([ready], failOpen);
+    setAgentStatus(doc, ready.id, "ready", NOW);
+
+    appendMessage(doc, humanMessage("hi", [ready.id]));
+    await dispatcher.idle(boardId);
+
+    expect(queue.jobs).toHaveLength(1);
+    expect(systemMessages(doc)).toEqual([]);
+  });
+
+  it("rate limits an approved agent_prompt turn too, visibly", async () => {
+    const target = agentRecord("Writer");
+    const { doc, queue, dispatcher } = setup([target], stubLimiter(0));
+    setAgentStatus(doc, target.id, "ready", NOW);
+
+    const enqueued = await dispatcher.enqueueProposalApprovedTurn({
+      boardId,
+      doc,
+      targetAgentId: target.id,
+      prompt: { authorId: newId("user"), authorKind: "human", content: "draft it" },
+    });
+
+    expect(enqueued).toBe(false);
+    expect(queue.jobs).toHaveLength(0);
+    expect(systemMessages(doc)[0]).toContain("Writer");
   });
 });

@@ -9,6 +9,7 @@ import { createBoardWithOwner, listBoardsForUser } from "@/lib/server/boards";
 import { createGuest } from "@/lib/server/guests";
 import { jsonError, readJson, serverError } from "@/lib/server/http";
 import { log } from "@/lib/server/log";
+import { enforceRateLimit } from "@/lib/server/rate-limit";
 
 const createBoardSchema = z
   .object({
@@ -23,6 +24,15 @@ const createBoardSchema = z
  */
 export async function POST(request: Request): Promise<NextResponse> {
   try {
+    // 10/min per IP: a person clicks "New board" a handful of times an hour —
+    // faster than this is a script minting throwaway users, boards, and rows.
+    const limited = await enforceRateLimit(request, {
+      bucket: "boards.create",
+      limit: 10,
+      windowSec: 60,
+    });
+    if (limited) return limited;
+
     const body = await readJson(request, createBoardSchema);
     if (!body.ok) return body.response;
 

@@ -8,6 +8,7 @@ import { env } from "@/lib/env";
 import type { BoardTokenResponse } from "@/lib/api/types";
 import { getMembership } from "@/lib/server/boards";
 import { jsonError, serverError } from "@/lib/server/http";
+import { enforceRateLimit } from "@/lib/server/rate-limit";
 
 interface RouteContext {
   params: Promise<{ boardId: string }>;
@@ -21,8 +22,18 @@ const TOKEN_TTL_MS = 10 * 60 * 1000;
  * { sub, boardId, role, name, color }, 10 minute expiry. The Hocuspocus
  * provider fetches a fresh one on every (re)connect.
  */
-export async function POST(_request: Request, context: RouteContext): Promise<NextResponse> {
+export async function POST(request: Request, context: RouteContext): Promise<NextResponse> {
   try {
+    // 120/min per IP: every board load and every ws reconnect mints one, so a
+    // flaky network or several tabs behind one NAT must never trip this — it
+    // exists only to cap an outright loop.
+    const limited = await enforceRateLimit(request, {
+      bucket: "boards.token",
+      limit: 120,
+      windowSec: 60,
+    });
+    if (limited) return limited;
+
     const { boardId } = await context.params;
     const viewer = await resolveViewer();
     if (!viewer) return jsonError(401, "unauthenticated", "Sign in or open an invite link first.");

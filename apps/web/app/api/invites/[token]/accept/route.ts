@@ -7,6 +7,7 @@ import { serverError } from "@/lib/server/http";
 import { acceptInvite, lookupInvite } from "@/lib/server/invites";
 import { log } from "@/lib/server/log";
 import { originFromRequest } from "@/lib/server/origin";
+import { enforceRateLimit } from "@/lib/server/rate-limit";
 
 interface RouteContext {
   params: Promise<{ token: string }>;
@@ -21,6 +22,16 @@ interface RouteContext {
  */
 export async function GET(request: Request, context: RouteContext): Promise<NextResponse> {
   try {
+    // 20/min per IP: accepting is one navigation, and a whole team arriving
+    // through the same office NAT still fits — it only stops a script farming
+    // guest identities off one link.
+    const limited = await enforceRateLimit(request, {
+      bucket: "invites.accept",
+      limit: 20,
+      windowSec: 60,
+    });
+    if (limited) return limited;
+
     const { token } = await context.params;
     const lookup = await lookupInvite(token);
     if (lookup.status !== "ok") {

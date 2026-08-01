@@ -24,6 +24,29 @@ describe("loadEnv", () => {
     );
   });
 
+  it("prefers WS_INTERNAL_URL — localhost is wrong once ws is a separate machine", () => {
+    expect(
+      loadEnv({ ...validEnv, WS_INTERNAL_URL: "http://quorum-ws.internal:3001" }).wsInternalBaseUrl,
+    ).toBe("http://quorum-ws.internal:3001");
+    // A trailing slash would produce a double slash in every internal request.
+    expect(
+      loadEnv({ ...validEnv, WS_INTERNAL_URL: "https://ws.example.com/" }).wsInternalBaseUrl,
+    ).toBe("https://ws.example.com");
+  });
+
+  it("treats an empty WS_INTERNAL_URL as unset rather than invalid", () => {
+    // Platforms hand through blank strings for unset vars; that must not fail boot.
+    expect(loadEnv({ ...validEnv, WS_INTERNAL_URL: "" }).wsInternalBaseUrl).toBe(
+      "http://localhost:3001",
+    );
+  });
+
+  it("rejects a malformed WS_INTERNAL_URL at boot instead of on the first turn", () => {
+    expect(() => loadEnv({ ...validEnv, WS_INTERNAL_URL: "not-a-url" })).toThrowError(
+      /WS_INTERNAL_URL/,
+    );
+  });
+
   it("fails fast when required variables are missing, naming them", () => {
     expect(() => loadEnv({})).toThrowError(/REDIS_URL/);
     expect(() => loadEnv({})).toThrowError(/DATABASE_URL/);

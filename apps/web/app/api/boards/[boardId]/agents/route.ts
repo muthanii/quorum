@@ -14,6 +14,7 @@ import { getMembership } from "@/lib/server/boards";
 import { jsonError, readJson, serverError } from "@/lib/server/http";
 import { log } from "@/lib/server/log";
 import { buildHumanProposal } from "@/lib/server/proposals";
+import { enforceRateLimit } from "@/lib/server/rate-limit";
 
 interface RouteContext {
   params: Promise<{ boardId: string }>;
@@ -52,6 +53,16 @@ const connectAgentSchema = z
 export async function POST(request: Request, context: RouteContext): Promise<NextResponse> {
   try {
     const { boardId } = await context.params;
+    // 10/min per board: connecting an agent is a deliberate one-paste action,
+    // and every attempt costs an encrypt + insert + staged proposal.
+    const limited = await enforceRateLimit(request, {
+      bucket: "agents.connect",
+      limit: 10,
+      windowSec: 60,
+      scope: boardId,
+    });
+    if (limited) return limited;
+
     const body = await readJson(request, connectAgentSchema);
     if (!body.ok) return body.response;
 
