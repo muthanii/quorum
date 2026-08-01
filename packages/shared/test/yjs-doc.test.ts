@@ -8,6 +8,7 @@ import type { ProposalInput } from "../src/schemas/proposal";
 import {
   appendMessage,
   applyOperationToDoc,
+  cascadePosition,
   castVote,
   createArtifactInDoc,
   createProposalInDoc,
@@ -96,6 +97,35 @@ describe("chat helpers", () => {
     const doc = new Y.Doc();
     expect(() => appendMessage(doc, makeMessage("x", { id: "bogus" }))).toThrow();
     expect(getChat(doc).length).toBe(0);
+  });
+});
+
+describe("cascadePosition", () => {
+  // Regression: ISSUE-002 — the 7th artifact spawned at exactly the 1st's
+  // coordinates and vanished under it (both axes used `count % 6`).
+  // Found by /qa on 2026-08-01
+  // Report: .gstack/qa-reports/qa-report-quorum-2026-08-01.md
+  it("does not put the 7th artifact on top of the 1st", () => {
+    expect(cascadePosition(6)).not.toEqual(cascadePosition(0));
+  });
+
+  it("gives 30 distinct positions before any repeat", () => {
+    const seen = new Set(
+      Array.from({ length: 30 }, (_, i) => {
+        const { x, y } = cascadePosition(i);
+        return `${x},${y}`;
+      }),
+    );
+    expect(seen.size).toBe(30);
+  });
+
+  it("repeats only on the full lcm(6,5) cycle", () => {
+    expect(cascadePosition(30)).toEqual(cascadePosition(0));
+  });
+
+  it("starts at the canvas origin and steps by 48px", () => {
+    expect(cascadePosition(0)).toEqual({ x: 120, y: 120 });
+    expect(cascadePosition(1)).toEqual({ x: 168, y: 168 });
   });
 });
 
