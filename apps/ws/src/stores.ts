@@ -32,17 +32,20 @@ import { serializeError, type Logger } from "./log";
 const SNAPSHOT_RETENTION = 3;
 
 /**
- * postgres-js returns the deleted rows as an array; other drivers surface a
- * `count`/`rowCount`. Read whichever is present so the store does not depend on
- * the driver's result shape.
+ * Rows affected by a DELETE, across driver result shapes.
+ *
+ * Order matters: postgres-js returns an Array SUBCLASS that carries the real
+ * figure on `.count`, and without a RETURNING clause its `.length` is 0. An
+ * `Array.isArray` check first therefore reports every delete as having removed
+ * nothing — which is exactly what the compaction log claimed before this.
  */
-function rowsAffected(result: unknown): number {
-  if (Array.isArray(result)) return result.length;
+export function rowsAffected(result: unknown): number {
   if (typeof result === "object" && result !== null) {
     const record = result as { count?: unknown; rowCount?: unknown };
     if (typeof record.count === "number") return record.count;
     if (typeof record.rowCount === "number") return record.rowCount;
   }
+  if (Array.isArray(result)) return result.length;
   return 0;
 }
 
