@@ -22,3 +22,6 @@ blob-report/
 .DS_Store
 *.log
 .gstack/
+
+# Captured build output for the CI bundle-budget gate.
+build.log

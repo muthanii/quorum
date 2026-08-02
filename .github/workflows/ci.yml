@@ -31,8 +31,9 @@ jobs:
 
       - run: pnpm test
 
-      # Catches env-parse regressions and enforces the 250KB bundle budget.
-      # Values are throwaway: nothing here connects to a real service.
+      # Catches env-parse regressions. Values are throwaway: nothing here
+      # connects to a real service. The build output is captured so the next
+      # step can enforce the bundle budget against Next's own figures.
       - name: Build web
         working-directory: apps/web
         env:
@@ -42,4 +43,14 @@ jobs:
           CREDENTIALS_ENCRYPTION_KEY: Y2ktcGxhY2Vob2xkZXItbm90LWEtcmVhbC1zZWNyZXQ=
           NEXT_PUBLIC_WS_URL: ws://localhost:3001
           NEXT_PUBLIC_APP_URL: http://localhost:3000
-        run: pnpm build
+        # `shell: bash` is load-bearing: it runs with `-eo pipefail`, so a failed
+        # build still fails the step. The default shell would report tee's exit
+        # code and let a broken build through.
+        shell: bash
+        run: pnpm build | tee build.log
+
+      # The 250KB gzipped initial-JS budget (CLAUDE.md §1). Previously the
+      # comment above claimed the build enforced this; nothing did.
+      - name: Check bundle budget
+        working-directory: apps/web
+        run: node scripts/check-bundle-budget.mjs build.log
