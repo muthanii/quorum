@@ -9,6 +9,13 @@
  * conservative: Yjs updates are commutative and idempotent, so re-applying
  * ones already contained in the snapshot is a no-op, and updates appended
  * after the snapshot was cut are never lost.
+ *
+ * Storing a snapshot also COMPACTS: the updates that snapshot subsumes are
+ * deleted in the same transaction, so the log is bounded by what arrives
+ * between two debounced snapshots rather than growing for the life of the
+ * board. Compaction is deliberately conservative in the same direction as
+ * replay — it prunes only what a snapshot provably contains, so the failure
+ * mode is keeping a redundant row, never dropping a live one.
  */
 import type {
   Extension,
@@ -71,9 +78,25 @@ export class PostgresPersistence implements Extension {
 
   async onStoreDocument({ document, documentName }: onStoreDocumentPayload): Promise<void> {
     try {
+      // Read the high-water mark BEFORE encoding. Hocuspocus applies an update
+      // to the document before onChange writes it, so every row at or below
+      // this id is already inside the state encoded next. Rows appended while
+      // we encode land above the mark and are kept — replaying an update the
+      // snapshot already contains is a no-op, losing one is not.
+      const compactThrough = await this.snapshots.latestUpdateId(documentName);
       const state = Y.encodeStateAsUpdate(document);
-      await this.snapshots.storeSnapshot(documentName, state);
-      this.log.debug("snapshot stored", { boardId: documentName, bytes: state.byteLength });
+      const { prunedUpdates, prunedSnapshots } = await this.snapshots.storeSnapshot(
+        documentName,
+        state,
+        compactThrough,
+      );
+      this.log.debug("snapshot stored", {
+        boardId: documentName,
+        bytes: state.byteLength,
+        compactThrough,
+        prunedUpdates,
+        prunedSnapshots,
+      });
     } catch (error) {
       this.log.error("failed to store yjs snapshot", {
         boardId: documentName,

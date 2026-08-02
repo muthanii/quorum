@@ -7,7 +7,7 @@
  * SECURITY: the agents queries select display-safe columns ONLY. Credential
  * ciphertext, IVs, tags, and signing secrets are never read by this process.
  */
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, lte, sql } from "drizzle-orm";
 
 import type { Db } from "@quorum/db/client";
 import {
@@ -27,6 +27,24 @@ import type { Proposal, ProposalStatus } from "@quorum/shared/schemas/proposal";
 import type { VoteValue } from "@quorum/shared/schemas/vote";
 
 import { serializeError, type Logger } from "./log";
+
+/** Snapshots kept per board beyond the newest, as a manual recovery fallback. */
+const SNAPSHOT_RETENTION = 3;
+
+/**
+ * postgres-js returns the deleted rows as an array; other drivers surface a
+ * `count`/`rowCount`. Read whichever is present so the store does not depend on
+ * the driver's result shape.
+ */
+function rowsAffected(result: unknown): number {
+  if (Array.isArray(result)) return result.length;
+  if (typeof result === "object" && result !== null) {
+    const record = result as { count?: unknown; rowCount?: unknown };
+    if (typeof record.count === "number") return record.count;
+    if (typeof record.rowCount === "number") return record.rowCount;
+  }
+  return 0;
+}
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -67,13 +85,35 @@ export interface BoardStore {
   removeAgent(agentId: string): Promise<void>;
 }
 
+/** What one compacting snapshot write removed. Zeroes when nothing was pruned. */
+export interface SnapshotWriteResult {
+  prunedUpdates: number;
+  prunedSnapshots: number;
+}
+
 export interface SnapshotStore {
   loadLatestSnapshot(boardId: string): Promise<{ seq: number; snapshot: Uint8Array } | null>;
   /** The full raw update log for the board, oldest first. */
   listUpdates(boardId: string): Promise<Uint8Array[]>;
   appendUpdate(boardId: string, update: Uint8Array): Promise<void>;
-  /** Store a snapshot at the next monotonic seq for the board. */
-  storeSnapshot(boardId: string, snapshot: Uint8Array): Promise<void>;
+  /**
+   * Highest update id currently stored for the board, or null when the log is
+   * empty. Read BEFORE encoding a snapshot: Hocuspocus applies an update to the
+   * document before onChange persists it, so a row at or below this id is
+   * guaranteed to be inside a snapshot encoded afterwards. Rows appended during
+   * the encode land above the mark and survive.
+   */
+  latestUpdateId(boardId: string): Promise<number | null>;
+  /**
+   * Store a snapshot at the next monotonic seq, and in the SAME transaction
+   * drop the updates it subsumes plus snapshots older than the retention
+   * window. Pass `compactThrough: null` to write without compacting.
+   */
+  storeSnapshot(
+    boardId: string,
+    snapshot: Uint8Array,
+    compactThrough: number | null,
+  ): Promise<SnapshotWriteResult>;
 }
 
 export interface AuditVote {
@@ -214,11 +254,50 @@ export function createStores(db: Db, log: Logger): Stores {
       await db.insert(yjsUpdates).values({ boardId, update: Buffer.from(update) });
     },
 
-    async storeSnapshot(boardId, snapshot) {
-      await db.insert(yjsSnapshots).values({
-        boardId,
-        snapshot: Buffer.from(snapshot),
-        seq: sql<number>`coalesce((select max(${yjsSnapshots.seq}) from ${yjsSnapshots} where ${yjsSnapshots.boardId} = ${boardId}), 0) + 1`,
+    async latestUpdateId(boardId) {
+      const row = await db.query.yjsUpdates.findFirst({
+        columns: { id: true },
+        where: (table, operators) => operators.eq(table.boardId, boardId),
+        orderBy: (table, operators) => operators.desc(table.id),
+      });
+      return row?.id ?? null;
+    },
+
+    async storeSnapshot(boardId, snapshot, compactThrough) {
+      // One transaction: a snapshot must never be pruned against unless it is
+      // itself durable, or a crash between the two statements loses history.
+      return db.transaction(async (tx) => {
+        await tx.insert(yjsSnapshots).values({
+          boardId,
+          snapshot: Buffer.from(snapshot),
+          seq: sql<number>`coalesce((select max(${yjsSnapshots.seq}) from ${yjsSnapshots} where ${yjsSnapshots.boardId} = ${boardId}), 0) + 1`,
+        });
+        // Nothing to prune when the log is empty, but snapshot retention still
+        // runs below — an idle board keeps writing snapshots on every store,
+        // and those are the larger rows.
+        const prunedUpdates =
+          compactThrough === null
+            ? 0
+            : rowsAffected(
+                await tx
+                  .delete(yjsUpdates)
+                  .where(and(eq(yjsUpdates.boardId, boardId), lte(yjsUpdates.id, compactThrough))),
+              );
+        // Keep a few older snapshots as a manual fallback if the newest one is
+        // ever unreadable; without a cap they are the bigger leak of the two,
+        // since each is the whole document rather than one delta.
+        const prunedSnapshots = await tx
+          .delete(yjsSnapshots)
+          .where(
+            and(
+              eq(yjsSnapshots.boardId, boardId),
+              lte(
+                yjsSnapshots.seq,
+                sql<number>`coalesce((select max(${yjsSnapshots.seq}) from ${yjsSnapshots} where ${yjsSnapshots.boardId} = ${boardId}), 0) - ${SNAPSHOT_RETENTION}`,
+              ),
+            ),
+          );
+        return { prunedUpdates, prunedSnapshots: rowsAffected(prunedSnapshots) };
       });
     },
   };
