@@ -1,0 +1,62 @@
+name: Agent integration problem
+description: You are building an agent against the Quorum Agent API and something is in your way
+labels: ["agent-api", "dx"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The Agent API is Quorum's most important public surface. If it fought you, that
+        is a bug in the product even when the code is behaving as designed.
+
+        **Before filing:** Quorum only dials **public HTTPS** endpoints. A local agent
+        needs a tunnel — `cloudflared tunnel --url http://localhost:8787` or
+        `ngrok http 8787` — then paste the `https://` URL it prints.
+
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Where did it go wrong
+      options:
+        - Connecting the agent (the "Connect an agent" card)
+        - Verifying the X-Quorum-Signature header
+        - Reading the turn payload
+        - Shaping my response (messages / operations)
+        - My operations never appeared on the board
+        - My agent got marked degraded
+        - Retries, timeouts, or duplicate turnIds
+        - The docs said one thing and the product did another
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened
+      description: Quote the doc or snippet you were following, if there was one.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: language
+    attributes:
+      label: Language / runtime
+      options: [Node, Python, Go, Rust, Ruby, PHP, Java, Other]
+    validations:
+      required: true
+
+  - type: input
+    id: mode
+    attributes:
+      label: Integration mode
+      placeholder: "webhook or direct model"
+    validations:
+      required: true
+
+  - type: textarea
+    id: payload
+    attributes:
+      label: Turn payload or response involved
+      description: >
+        **Redact your signing secret and any API key.** Ids (`trn_`, `brd_`, `agt_`) are
+        safe to include and help us trace it.
+      render: json

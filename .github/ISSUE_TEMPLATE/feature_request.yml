@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest something Quorum should do
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Worth knowing before you write: Quorum is deliberately **not** an agent-building
+        platform, a workflow/DAG builder, or an enterprise admin console, and it is not
+        offline-first. Those are stated non-goals, so proposals in that direction are
+        likely to be declined regardless of quality.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you hitting
+      description: Describe the situation, not the solution. What were you trying to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: principles
+    attributes:
+      label: How it fits the product principles
+      description: >
+        Quorum holds six: zero setup, everything on screen, unanimous by default, real
+        time or it doesn't count, one-click sharing, and lightweight (<250KB gzipped
+        initial JS). Which does this serve, and does it strain any of them?

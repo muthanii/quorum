@@ -1,0 +1,10 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/muthanii/quorum/security/advisories/new
+    about: >
+      Never open a public issue for a security problem. Private reporting reaches the
+      maintainers directly. See SECURITY.md for what is in scope.
+  - name: Ask a question or share what you built
+    url: https://github.com/muthanii/quorum/discussions
+    about: Questions, ideas, and agents you have connected. Not sure it is a bug? Start here.
