@@ -147,16 +147,52 @@ export interface EnforceRateLimitOptions {
   store?: RateLimitStore;
 }
 
+/** `boards.create` → `RATE_LIMIT_BOARDS_CREATE`. */
+function envNameForBucket(bucket: string): string {
+  return `RATE_LIMIT_${bucket.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase()}`;
+}
+
+/**
+ * Per-bucket ceiling, overridable per environment.
+ *
+ * The shipped defaults are tuned for a public deployment behind a proxy that
+ * sets x-forwarded-for, where each abuser gets their own bucket. Without that
+ * header every caller shares the `ip:unknown` bucket — which is exactly the
+ * local case, and why the e2e suite (18 self-seeding specs, 4 workers, one
+ * apparent client) exhausted a 10/min budget and failed with 429.
+ *
+ * Read off process.env for the same reason as REDIS_URL above: lib/env's eager
+ * boot parse would make this module untestable. A missing, non-numeric, or
+ * non-positive value keeps the caller's default, so a typo can never silently
+ * disable a limit.
+ */
+function resolveLimit(bucket: string, fallback: number): number {
+  const raw = process.env[envNameForBucket(bucket)];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    log.warn("rate_limit.bad_override", { bucket, value: raw, using: fallback });
+    return fallback;
+  }
+  return parsed;
+}
+
 /** null when the request may proceed, otherwise the 429 to return as-is. */
 export async function enforceRateLimit(
   request: Request,
   { bucket, limit, windowSec, scope, store }: EnforceRateLimitOptions,
 ): Promise<NextResponse | null> {
   const subject = scope ?? `ip:${clientIpFromRequest(request)}`;
-  const result = await checkRateLimit({ key: `rl:${bucket}:${subject}`, limit, windowSec, store });
+  const effectiveLimit = resolveLimit(bucket, limit);
+  const result = await checkRateLimit({
+    key: `rl:${bucket}:${subject}`,
+    limit: effectiveLimit,
+    windowSec,
+    store,
+  });
   if (result.allowed) return null;
 
-  log.warn("rate_limit.blocked", { bucket, subject, limit, windowSec });
+  log.warn("rate_limit.blocked", { bucket, subject, limit: effectiveLimit, windowSec });
   const response = jsonError(
     429,
     "rate_limited",

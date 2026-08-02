@@ -24,7 +24,12 @@ import { agentStatusSchema } from "@quorum/shared/schemas/agent";
 import type { ConsensusPolicy } from "@quorum/shared/schemas/policy";
 import type { Proposal, ProposalInput } from "@quorum/shared/schemas/proposal";
 import { agentOperationSchema, agentMessageSchema } from "@quorum/shared/schemas/turn";
-import { appendMessage, createProposalInDoc, setAgentStatus } from "@quorum/shared/yjs/doc";
+import {
+  appendMessage,
+  createProposalInDoc,
+  readAgentStatuses,
+  setAgentStatus,
+} from "@quorum/shared/yjs/doc";
 import { messageSchema } from "@quorum/shared/schemas/message";
 
 import { serializeError, type Logger } from "./log";
@@ -45,6 +50,28 @@ export const agentStatusBodySchema = z.object({
   agentId: idSchema("agent"),
   status: agentStatusSchema,
 });
+
+type AgentStatus = z.infer<typeof agentStatusSchema>;
+
+/**
+ * The board-chat notice for an agent status change, or null when the change
+ * needs none.
+ *
+ * A degraded agent stops answering @mentions and dispatch drops those turns
+ * with nothing but a server log, so someone keeps typing at an agent that went
+ * quiet. The roster pill alone is not enough: the chat is where they are
+ * talking, and §7 forbids the silent refusal. Only the transition INTO
+ * degraded speaks, so one outage costs one message rather than one per dropped
+ * mention (the same restraint as the rate-limit notice in turns.ts).
+ */
+export function degradedNotice(
+  previous: AgentStatus | undefined,
+  next: AgentStatus,
+  agentName: string,
+): string | null {
+  if (next !== "degraded" || previous === "degraded") return null;
+  return `${agentName} stopped responding and is marked degraded — @mentions will not reach it until it recovers.`;
+}
 
 /** Load a board doc (via a Hocuspocus direct connection) and mutate it. */
 export interface DocGateway {
@@ -332,7 +359,20 @@ export function createInternalApi(deps: InternalApiDeps): InternalApi {
     if (agent === null) throw new HttpError(404, "agent is not on this board");
     await deps.boards.setAgentStatus(body.agentId, body.status);
     await deps.docs.withDoc(body.boardId, (doc) => {
+      const previous = readAgentStatuses(doc)[body.agentId]?.status;
       setAgentStatus(doc, body.agentId, body.status, now());
+      const notice = degradedNotice(previous, body.status, agent.name);
+      if (notice !== null) {
+        appendMessage(doc, {
+          id: newId("message"),
+          role: "system",
+          authorId: "system",
+          name: "Quorum",
+          content: notice,
+          createdAt: now(),
+          mentions: [],
+        });
+      }
     });
     deps.log.info("agent status updated", {
       boardId: body.boardId,
