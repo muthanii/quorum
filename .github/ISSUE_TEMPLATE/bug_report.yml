@@ -1,0 +1,66 @@
+name: Bug report
+description: Something in Quorum behaves differently than it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. If this is a **security** issue, close this and use
+        [private reporting](https://github.com/muthanii/quorum/security/advisories/new)
+        instead — see [SECURITY.md](../blob/main/SECURITY.md).
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+      placeholder: |
+        I clicked "Connect an agent" with a valid HTTPS URL and…
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps. A board id or a screenshot helps a lot.
+      placeholder: |
+        1. pnpm dev
+        2. Open http://localhost:3000 and click New board
+        3. …
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part
+      options:
+        - Board / canvas / artifacts
+        - Chat and @mentions
+        - Consensus (proposals, votes, quorum)
+        - Agent connect / agent turns
+        - Realtime sync or presence
+        - Auth, invites, or sharing
+        - Setup / local dev / CI
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console or server output
+      description: >
+        Browser console errors and the relevant `pnpm dev` output. **Redact secrets** —
+        never paste `AUTH_SECRET`, `CREDENTIALS_ENCRYPTION_KEY`, or an agent signing
+        secret.
+      render: shell
+
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: "Node 22.14, pnpm 9.15.4, Chrome 141, macOS 15 / Ubuntu 24.04 / WSL2"
+    validations:
+      required: true

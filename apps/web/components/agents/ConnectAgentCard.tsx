@@ -74,7 +74,12 @@ export function ConnectAgentCard({ boardId, doc, open, onOpenChange }: ConnectAg
     const trimmedUrl = endpointUrl.trim();
     if (trimmedName === "") return setFormError("Give the agent a name.");
     if (!/^https:\/\//i.test(trimmedUrl)) {
-      return setFormError("Agent endpoints must be HTTPS URLs.");
+      // The common case behind this is an agent running on the developer's own
+      // machine, where "use HTTPS" is not something they can act on. Name the
+      // way out, or they are stuck at the first step of the Agent API.
+      return setFormError(
+        "Agent endpoints must be HTTPS URLs. Running it locally? Expose it with `cloudflared tunnel --url http://localhost:8787` (or `ngrok http 8787`) and paste the https:// URL.",
+      );
     }
     const input: ConnectAgentInput = { name: trimmedName, kind, endpointUrl: trimmedUrl };
     if (secret.trim() !== "") input.secret = secret.trim();
