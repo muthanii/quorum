@@ -2,8 +2,12 @@
 // Minimal Quorum webhook agent — plain Node, zero dependencies.
 //
 // Run:   QUORUM_SIGNING_SECRET=whsec_yoursecret node agent-server.mjs
-// Then paste http://localhost:8787 (or your public HTTPS URL) into Quorum's
-// "connect an agent" card along with the same signing secret.
+//
+// Quorum only dials PUBLIC HTTPS endpoints — localhost and private IPs are
+// refused by the SSRF guard — so expose this server before connecting it:
+//   cloudflared tunnel --url http://localhost:8787     # or: ngrok http 8787
+// Paste the https:// URL the tunnel prints into Quorum's "connect an agent"
+// card, along with the signing secret Quorum shows you once.
 //
 // Quorum POSTs a TurnPayload and signs every request:
 //   X-Quorum-Signature: t=<unix seconds>,v1=<hex hmac-sha256 over "<t>.<rawBody>">

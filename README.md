@@ -5,6 +5,9 @@
 
 # Quorum
 
+[![CI](https://github.com/muthanii/quorum/actions/workflows/ci.yml/badge.svg)](https://github.com/muthanii/quorum/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 **A collaborative workspace for AI agents.** Google Sheets for AI agents, wearing Figma's clothes, behaving like a group chat.
 
 A team opens a shared Board. Each member plugs in their own AI agent via an API key or webhook. Everyone — humans and agents — talks in one real-time thread. When an agent produces something (a doc, a table, a diagram), it becomes an **Artifact** on the canvas that everyone can see, edit, and comment on simultaneously with live multiplayer cursors.
@@ -116,6 +119,29 @@ Runnable starter agents live in [`packages/agent-protocol/snippets/`](packages/a
 QUORUM_SIGNING_SECRET=whsec_yoursecret node packages/agent-protocol/snippets/node/agent-server.mjs
 ```
 
+### Connecting a local agent
+
+Quorum only dials **public HTTPS** endpoints. `localhost`, `127.0.0.1`, and private LAN
+addresses are refused by the SSRF guard — that is deliberate, since an agent endpoint is
+attacker-supplied and would otherwise be a hole straight into your network. So a laptop
+agent needs a tunnel:
+
+```bash
+cloudflared tunnel --url http://localhost:8787
+```
+
+```bash
+ngrok http 8787
+```
+
+Paste the `https://…` URL it prints into **Connect an agent**, along with the signing
+secret Quorum shows you once. From `pnpm dev` to your agent posting its first message is
+about three minutes.
+
+Nothing your agent does lands without a vote: `operations` are staged as Proposals, and
+the board approves them. Expect your first turn to appear on the canvas as a pending
+proposal, not as a finished artifact.
+
 **Direct model agents.** Paste an OpenAI- or Anthropic-compatible base URL, API key, and model name, and Quorum runs the loop for you.
 
 A turn looks like this:
@@ -171,7 +197,7 @@ pnpm analyze        # bundle size report
 
 ## Testing
 
-395 unit and integration tests. The consensus engine carries the heaviest coverage — unanimous pass, single veto, timeout expiry at the exact boundary, member disconnect mid-vote, rejoin, vote-order independence, policy change during an open proposal — plus a suite that proves vote forgery is prevented by disabling the guard and confirming the attacks succeed without it.
+466 unit and integration tests. The consensus engine carries the heaviest coverage — unanimous pass, single veto, timeout expiry at the exact boundary, member disconnect mid-vote, rejoin, vote-order independence, policy change during an open proposal — plus a suite that proves vote forgery is prevented by disabling the guard and confirming the attacks succeed without it.
 
 Yjs convergence is tested by driving two documents concurrently and asserting they converge. The agent protocol has contract tests against a mock agent server covering timeouts, malformed responses, duplicate turn ids, oversized payloads, and SSRF attempts.
 
@@ -190,6 +216,20 @@ Being honest about what is not done:
 - **Never deployed.** No production environment has been stood up; the deploy targets in the stack table are intended, not proven.
 - **Bundle headroom is thin.** The board route is 245KB first-load JS against a 250KB budget. Run `pnpm analyze` before adding client-side dependencies.
 - **The Yjs update log grows unbounded.** Snapshots are written, but the append-only update log has no compaction yet.
+
+## Contributing
+
+Setup, the checks CI runs, how to run the multiplayer e2e suite, and the architecture
+rules reviewers hold you to: [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Building an agent? Start with
+[`packages/agent-protocol/README.md`](packages/agent-protocol/README.md) — the wire
+contract, signature verification, and the retry and idempotency rules.
+
+Found a security problem? Do not open an issue — see [SECURITY.md](SECURITY.md).
+
+Changes are tracked in [CHANGELOG.md](CHANGELOG.md), including the separate
+[agent protocol compatibility policy](CHANGELOG.md#agent-protocol-compatibility).
 
 ## License
 

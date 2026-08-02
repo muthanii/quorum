@@ -13,6 +13,15 @@ export class AgentEndpointError extends Error {
   }
 }
 
+/**
+ * Appended to every rejection a local agent will hit. Quorum only dials public
+ * HTTPS, so "use a public URL" is not actionable on a laptop — the next step a
+ * developer needs is the tunnel, and an error that names the rule without the
+ * remedy is where they give up (CLAUDE.md §8: surface a recovery action).
+ */
+const TUNNEL_HINT =
+  " Running the agent locally? Expose it first: `cloudflared tunnel --url http://localhost:8787` (or `ngrok http 8787`), then paste the https:// URL it prints.";
+
 const BLOCKED_HOSTNAMES = new Set(["localhost", "metadata.google.internal", "0.0.0.0"]);
 
 const BLOCKED_SUFFIXES = [".localhost", ".local", ".internal", ".home.arpa"];
@@ -38,7 +47,7 @@ export function assertSaneAgentEndpoint(raw: string): URL {
     throw new AgentEndpointError("Endpoint must be a valid absolute URL.");
   }
   if (url.protocol !== "https:") {
-    throw new AgentEndpointError("Endpoint must use https://.");
+    throw new AgentEndpointError("Endpoint must use https://." + TUNNEL_HINT);
   }
   if (url.username !== "" || url.password !== "") {
     throw new AgentEndpointError("Endpoint URL must not embed credentials.");
@@ -46,7 +55,7 @@ export function assertSaneAgentEndpoint(raw: string): URL {
 
   const hostname = url.hostname.toLowerCase();
   if (BLOCKED_HOSTNAMES.has(hostname) || BLOCKED_SUFFIXES.some((s) => hostname.endsWith(s))) {
-    throw new AgentEndpointError("Endpoint host looks internal — use a public HTTPS URL.");
+    throw new AgentEndpointError("Endpoint host looks internal." + TUNNEL_HINT);
   }
   // IPv6 literals (URL strips the brackets, leaving ":") are rejected
   // outright at this layer; the worker's resolver-based check is the place
@@ -55,7 +64,7 @@ export function assertSaneAgentEndpoint(raw: string): URL {
     throw new AgentEndpointError("IPv6 literal endpoints are not supported — use a hostname.");
   }
   if (IPV4_LITERAL.test(hostname) && PRIVATE_IPV4_PATTERNS.some((p) => p.test(hostname))) {
-    throw new AgentEndpointError("Endpoint IP is in a private or reserved range.");
+    throw new AgentEndpointError("Endpoint IP is in a private or reserved range." + TUNNEL_HINT);
   }
   return url;
 }
