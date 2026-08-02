@@ -211,11 +211,12 @@ The Playwright suite needs the stack running (`docker compose up -d` and `pnpm d
 
 Being honest about what is not done:
 
-- **No rate limiting.** `POST /api/boards` will mint a new guest identity and board on every unauthenticated request. This needs a Redis-backed limiter before any public deployment.
-- **The e2e suite has never been executed.** It is written and typechecks, but has not been run against live services.
-- **Never deployed.** No production environment has been stood up; the deploy targets in the stack table are intended, not proven.
-- **Bundle headroom is thin.** The board route is 245KB first-load JS against a 250KB budget. Run `pnpm analyze` before adding client-side dependencies.
-- **The Yjs update log grows unbounded.** Snapshots are written, but the append-only update log has no compaction yet.
+- **Never deployed.** No production environment has been stood up; the deploy targets in the stack table are intended, not proven. [`DEPLOYING.md`](DEPLOYING.md) is a runbook that has never been executed end to end, and nothing in it is covered by a test.
+- **Bundle headroom is thin.** The board route is 245KB first-load JS against the 250KB gzipped budget — 5KB, or 2%. CI now fails if any route crosses it, but the next client-side dependency is very likely to. Run `pnpm analyze` first.
+- **`ws` is a single point of failure.** One Fly machine by design: board state lives in that process's memory, and sharing it across instances needs `@hocuspocus/extension-redis`, which is not installed. A deploy or crash disconnects every board. Clients reconnect and Yjs re-syncs, but in-flight awareness is lost.
+- **Rate limits share one bucket without a proxy header.** `clientIpFromRequest` falls back to a literal `"unknown"`, so every caller that arrives without `x-forwarded-for` is counted together. Vercel always sets it, so the deployed web path is fine — but the failure mode is a global lockout rather than blocking one abuser.
+- **No Y.Doc schema migration path.** Live documents cannot be recreated from Postgres, and there is no mechanism for evolving their shape. This is the constraint most likely to hurt later.
+- **`@quorum/agent-protocol` is not published.** It is dependency-free and meant to be vendored, but there is no npm package and no version field on the wire, so an agent cannot detect contract drift.
 
 ## Contributing
 
